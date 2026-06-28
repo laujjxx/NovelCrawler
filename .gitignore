@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 输出数据（不上传爬取结果）
+output/rank/
+output/analysis/
+output/*.html
+output/*.png
+
+# Cookie 文件（敏感信息）
+cookies/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 调试文件
+debug_*.py
+*.log
