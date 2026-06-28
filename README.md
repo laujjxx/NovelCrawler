@@ -1,35 +1,33 @@
-# NovelCrawler — 小说扫榜拆书工具
+# NovelCrawler — 小说扫榜拆书工具 📚
 
-基于 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 架构模式打造的小说排行榜爬取 + AI 拆书分析工具。
+一个基于 Python 的小说排行榜爬取 + AI 拆书分析工具，支持多平台，帮助网文作者和编辑快速了解市场趋势、拆解热门作品。
 
-## 功能特性
+## ✨ 功能特性
 
 ### 📊 扫榜
-- 爬取起点中文网各类排行榜（月票榜、推荐票榜、收藏榜、畅销榜、新书榜、完本榜）
-- 获取排行榜小说基本信息（书名、作者、字数、分类等）
-- 支持批量获取小说详情页数据
+- 爬取各平台排行榜数据（书名、作者、字数、分类、简介等）
+- 支持批量获取小说详情
+- 数据导出为 CSV / JSON 格式，方便 Excel 分析
 
-### 📖 拆书分析
+### 🤖 AI 拆书分析
+- 🎨 **写作风格分析** — 叙事视角、语言风格、节奏感、优缺点
+- 📈 **情节节奏分析** — 故事结构、钩子设置、爽点分布、常见套路
+- 👥 **人物关系分析** — 主角设定、配角定位、关系网络
+- 支持任何 OpenAI 兼容接口（DeepSeek、通义千问、Ollama 等）
 
-#### 基础结构分析（无需 LLM）
-- 总字数、章节数、平均章节字数
-- 卷结构分析
-- VIP 章节比例
-- 章节标题模式分析
-- 更新频率估算
-- 评分和热度数据
+### 🌐 支持平台
+| 平台 | 状态 | 榜单 |
+|------|------|------|
+| 起点中文网 | ✅ | 月票榜、推荐票榜、收藏榜、畅销榜、新书榜、完本榜 |
+| 番茄小说 | ✅ | 热门榜、推荐榜 |
+| 纵横中文网 | 🔜 | 待接入 |
 
-#### AI 深度分析（需要 LLM API）
-- 🎨 **写作风格分析** — 叙事视角、语言风格、对话质量、节奏感
-- 📈 **情节节奏分析** — 故事结构、钩子/爽点分布、转折点、常见套路
-- 👥 **人物关系分析** — 主角设定、配角定位、关系网络、角色原型
-
-## 快速开始
+## 🚀 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-cd D:\NovelCrawler
+cd NovelCrawler
 pip install -r requirements.txt
 playwright install chromium
 ```
@@ -43,81 +41,85 @@ set LLM_API_BASE=https://api.openai.com/v1
 set LLM_MODEL=gpt-4o-mini
 ```
 
+支持的 API 服务：OpenAI、DeepSeek、通义千问、Ollama（本地）、小米 MiMo 等任何兼容 OpenAI 格式的接口。
+
 ### 3. 使用命令
 
 ```bash
-# 扫榜 — 爬取月票榜
-python main.py rank
-
-# 扫榜 — 爬取推荐票榜前20本并获取详情
-python main.py rank --type tuijian --top 20
-
-# 查看小说详情
-python main.py detail https://book.qidian.com/info/12345/
-
-# 拆书分析（基础+AI）
-python main.py analyze https://book.qidian.com/info/12345/
-
-# 只做基础分析（跳过 AI）
-python main.py analyze 12345 --skip-ai
-
-# 完整流程：扫榜 + 拆解 Top 10
-python main.py full --top 10
-
-# 列出支持的榜单
+# 列出所有支持的榜单
 python main.py list-ranks
+
+# 扫起点月票榜 Top 10
+python main.py -p qidian rank --top 10
+
+# 扫番茄热门榜
+python main.py -p fanqie rank --top 10
+
+# 拆书分析（基础 + AI）
+python main.py -p qidian analyze 1035420986
+
+# 只做基础分析（不调 AI）
+python main.py -p fanqie analyze fanqie:6753575799414066190 --skip-ai
+
+# 扫榜 + 自动拆解 Top 10
+python main.py -p qidian full --top 10
 ```
 
-## 项目结构
+## 📁 项目结构
 
 ```
 NovelCrawler/
-├── main.py                     # CLI 入口
+├── main.py                          # CLI 入口
 ├── config/
-│   └── base_config.py          # 全局配置
+│   └── base_config.py               # 全局配置
 ├── base/
-│   ├── base_crawler.py         # 爬虫基类
-│   └── base_analyzer.py        # AI 分析器基类
+│   ├── base_crawler.py              # 爬虫基类
+│   └── base_analyzer.py             # AI 分析器基类
 ├── novel_platform/
-│   └── qidian/                 # 起点中文网
-│       ├── crawler.py          # 排行榜爬虫
-│       ├── parser.py           # 页面解析器
-│       └── model.py            # 数据模型
+│   ├── qidian/                      # 起点中文网
+│   │   ├── crawler.py               # 排行榜爬虫
+│   │   ├── parser.py                # 页面解析器
+│   │   └── model.py                 # 数据模型
+│   └── fanqie/                      # 番茄小说
+│       └── crawler.py               # API 爬虫
 ├── analyzer/
-│   ├── structure_analyzer.py   # 基础结构分析
-│   ├── style_analyzer.py       # AI 写作风格分析
-│   ├── plot_analyzer.py        # AI 情节节奏分析
-│   └── character_analyzer.py   # AI 人物关系分析
+│   ├── structure_analyzer.py        # 基础结构分析（纯统计）
+│   ├── style_analyzer.py            # AI 写作风格分析
+│   ├── plot_analyzer.py             # AI 情节节奏分析
+│   └── character_analyzer.py        # AI 人物关系分析
 ├── store/
-│   └── csv_store.py            # CSV/JSON 存储
+│   └── csv_store.py                 # CSV / JSON 存储
 ├── tools/
-│   ├── browser.py              # Playwright 浏览器管理
-│   └── utils.py                # 工具函数
-└── output/
-    ├── rank/                   # 排行榜数据输出
-    └── analysis/               # 拆书分析报告
+│   ├── browser.py                   # Playwright 浏览器管理
+│   └── utils.py                     # 工具函数
+└── output/                          # 输出目录
+    ├── rank/                        # 排行榜数据
+    └── analysis/                    # 拆书分析报告
 ```
 
-## 输出文件
+## 🔧 扩展新平台
 
-| 文件 | 说明 |
-|------|------|
-| `output/rank/qidian_yuepiao_2026-06-28.csv` | 月票榜数据 |
-| `output/rank/qidian_novel_12345.json` | 小说详情 |
-| `output/analysis/qidian_12345_analysis_2026-06-28.json` | 拆书分析报告 |
-| `output/analysis/qidian_analysis_summary_2026-06-28.csv` | 批量分析汇总 |
+项目架构支持快速扩展新平台，只需：
 
-## 扩展其他平台
+1. 在 `novel_platform/` 下创建新目录
+2. 实现 `crawler.py`（继承 `BaseCrawler` 或独立实现）
+3. 在 `config/base_config.py` 添加平台配置
+4. 在 `main.py` 的 `PLATFORMS` 字典中注册
 
-项目架构支持后续扩展，添加新平台只需：
+## ⚠️ 免责声明
 
-1. 在 `novel_platform/` 下创建新目录（如 `fanqie/`）
-2. 实现 `model.py`、`parser.py`、`crawler.py`
-3. 在 `config/base_config.py` 中添加平台配置
+**本工具仅供学习和研究使用。**
 
-## 注意事项
+1. 本项目不提供任何小说正文内容的下载或存储功能
+2. 本项目仅爬取公开可访问的排行榜元数据（书名、作者、字数、分类等）
+3. 使用本工具时请遵守目标网站的服务条款和 robots.txt 规则
+4. 请合理控制爬取频率，避免对目标服务器造成不必要的负担
+5. 本工具所获取的数据仅供个人学习研究使用，**不得用于任何商业用途**
+6. 使用本工具产生的一切法律责任由使用者自行承担
+7. 本项目开发者不对因使用本工具而产生的任何直接或间接损失负责
 
-- ⚠️ 本工具仅供学习和研究使用
-- 🕷️ 请遵守目标网站的 robots.txt 和使用条款
-- ⏱️ 已内置请求间隔，避免对目标网站造成压力
-- 🔒 Cookie 文件保存在 `cookies/` 目录，请勿泄露
+**如果您是相关平台的权利人并认为本项目侵犯了您的权益，请联系删除。**
+
+## 📄 许可证
+
+MIT License
