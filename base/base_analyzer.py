@@ -7,7 +7,13 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from config.base_config import LLM_API_BASE, LLM_API_KEY, LLM_MAX_TOKENS, LLM_MODEL, LLM_TEMPERATURE
+from config.base_config import (
+    LLM_API_BASE,
+    LLM_API_KEY,
+    LLM_MAX_TOKENS,
+    LLM_MODEL,
+    LLM_TEMPERATURE,
+)
 from tools.utils import setup_logger, truncate_text
 
 
@@ -16,6 +22,11 @@ class BaseAnalyzer(abc.ABC):
     AI 分析器基类
     统一封装 LLM API 调用，子类只需实现具体的分析 prompt
     """
+
+    # 子类需定义的常量
+    SYSTEM_PROMPT: str = ""
+    ANALYSIS_TYPE: str = ""
+    MAX_CHAPTERS_IN_PROMPT: int = 30
 
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
@@ -35,14 +46,6 @@ class BaseAnalyzer(abc.ABC):
     ) -> str:
         """
         调用 LLM API（OpenAI 兼容格式）
-        Args:
-            system_prompt: 系统提示词
-            user_prompt: 用户提示词
-            temperature: 温度参数
-            max_tokens: 最大生成 token 数
-            response_format: 响应格式（如 "json_object"）
-        Returns:
-            LLM 返回的文本
         """
         url = f"{self.api_base}/chat/completions"
         headers = {
@@ -69,7 +72,13 @@ class BaseAnalyzer(abc.ABC):
                 content = data["choices"][0]["message"]["content"]
                 return content.strip()
         except httpx.HTTPStatusError as e:
-            self.logger.error(f"LLM API 请求失败 [{e.response.status_code}]: {e.response.text[:500]}")
+            self.logger.error(
+                f"LLM API 请求失败 [{e.response.status_code}]: "
+                f"{e.response.text[:500]}"
+            )
+            raise
+        except httpx.TimeoutException as e:
+            self.logger.error(f"LLM API 调用超时: {e}")
             raise
         except Exception as e:
             self.logger.error(f"LLM API 调用异常: {e}")
@@ -81,9 +90,7 @@ class BaseAnalyzer(abc.ABC):
         user_prompt: str,
         temperature: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """
-        调用 LLM 并解析 JSON 响应
-        """
+        """调用 LLM 并解析 JSON 响应"""
         raw = await self._call_llm(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -103,11 +110,71 @@ class BaseAnalyzer(abc.ABC):
 
     @abc.abstractmethod
     async def analyze(self, novel_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        执行分析
-        Args:
-            novel_data: 小说数据（详情 + 章节等）
-        Returns:
-            分析结果字典
-        """
+        """执行分析"""
         raise NotImplementedError
+
+    # ==================== 共享的 prompt 构建 ====================
+
+    def _build_prompt(
+        self,
+        detail: Dict[str, Any],
+        chapters: List[Dict[str, Any]],
+        extra_instruction: str = "",
+    ) -> str:
+        """
+        构建分析 prompt 的公共模板
+        子类可重写或直接使用
+        """
+        parts = [
+            "## 小说信息",
+            f"- 书名: {detail.get('title', '未知')}",
+            f"- 作者: {detail.get('author', '未知')}",
+            f"- 类型: {detail.get('category', '未知')} {detail.get('sub_category', '')}",
+            f"- 标签: {', '.join(detail.get('tags', []))}",
+            f"- 总字数: {detail.get('word_count', 0)}",
+            f"- 章节数: {len(chapters)}",
+            f"- 状态: {detail.get('status', '未知')}",
+            "",
+            "## 简介",
+            detail.get("description", "无简介"),
+            "",
+            f"## 章节目录（前{self.MAX_CHAPTERS_IN_PROMPT}章）",
+        ]
+
+        for i, ch in enumerate(chapters[: self.MAX_CHAPTERS_IN_PROMPT]):
+            vol = ch.get("volume_name", "")
+            prefix = f"[{vol}] " if vol else ""
+            parts.append(f"  {i+1}. {prefix}{ch.get('title', '无标题')}")
+
+        if len(chapters) > self.MAX_CHAPTERS_IN_PROMPT:
+            parts.append(f"  ... 共 {len(chapters)} 章")
+
+        if extra_instruction:
+            parts.append("")
+            parts.append(extra_instruction)
+
+        return "\n".join(parts)
+
+    async def _run_analysis(
+        self,
+        novel_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        执行分析的通用流程
+        子类应调用此方法，传入 ANALYSIS_TYPE 和 SYSTEM_PROMPT
+        """
+        detail = novel_data.get("detail", {})
+        chapters = novel_data.get("chapters", [])
+
+        user_prompt = self._build_prompt(detail, chapters)
+        self.logger.info(f"正在分析 [{self.ANALYSIS_TYPE}]: {detail.get('title', '未知')}")
+
+        result = await self._call_llm_json(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+        )
+
+        result["analysis_type"] = self.ANALYSIS_TYPE
+        result["book_id"] = detail.get("book_id", "")
+        result["title"] = detail.get("title", "")
+        return result

@@ -15,6 +15,12 @@
 - 👥 **人物关系分析** — 主角设定、配角定位、关系网络
 - 支持任何 OpenAI 兼容接口（DeepSeek、通义千问、Ollama 等）
 
+### 🏗️ 架构设计
+- **平台抽象层**：`BaseCrawler` 基类定义统一接口，`FanqieCrawler` 和 `QidianCrawler` 多态实现
+- **API/浏览器双模式**：起点支持 httpx 直连移动端 API（快）和 Playwright 浏览器渲染（稳）
+- **多层降级解析**：起点爬虫内建 3 层解析策略（`__INITIAL_STATE__` JSON → 移动版 `pageProps` → HTML 正则回退）
+- **并发控制**：`asyncio.Semaphore` + 请求延迟，避免触发反爬
+
 ### 🌐 支持平台（已接入）
 | 平台 | 状态 | 榜单 |
 |------|------|------|
@@ -28,16 +34,16 @@
 ```bash
 cd NovelCrawler
 pip install -r requirements.txt
-playwright install chromium
+playwright install chromium  # 仅浏览器模式需要
 ```
 
 ### 2. 配置 AI 分析（可选）
 
+复制 `.env.example` 为 `.env` 并填入你的 API Key：
+
 ```bash
-# 设置 LLM API（支持 OpenAI 兼容接口）
-set LLM_API_KEY=your-api-key
-set LLM_API_BASE=https://api.openai.com/v1
-set LLM_MODEL=gpt-4o-mini
+cp .env.example .env
+# 编辑 .env 文件，填入 LLM_API_KEY
 ```
 
 支持的 API 服务：OpenAI、DeepSeek、通义千问、Ollama（本地）、小米 MiMo 等任何兼容 OpenAI 格式的接口。
@@ -64,23 +70,33 @@ python main.py -p fanqie analyze fanqie:6753575799414066190 --skip-ai
 python main.py -p qidian full --top 10
 ```
 
+### 4. 运行测试
+
+```bash
+pip install pytest
+python -m pytest tests/ -v
+```
+
 ## 📁 项目结构
 
 ```
 NovelCrawler/
 ├── main.py                          # CLI 入口
+├── requirements.txt                 # 项目依赖
+├── .env.example                     # 环境变量模板
+├── pyproject.toml                   # pytest 配置
 ├── config/
 │   └── base_config.py               # 全局配置
 ├── base/
-│   ├── base_crawler.py              # 爬虫基类
-│   └── base_analyzer.py             # AI 分析器基类
+│   ├── base_crawler.py              # 爬虫基类（含共享 crawl_rank_with_details）
+│   └── base_analyzer.py             # AI 分析器基类（含共享 _build_prompt）
 ├── novel_platform/
 │   ├── qidian/                      # 起点中文网
-│   │   ├── crawler.py               # 排行榜爬虫
-│   │   ├── parser.py                # 页面解析器
-│   │   └── model.py                 # 数据模型
+│   │   ├── crawler.py               # 排行榜爬虫（API + 浏览器双模式）
+│   │   ├── parser.py                # Playwright 页面解析器
+│   │   └── model.py                 # 数据模型（NovelInfo/NovelDetail/ChapterInfo）
 │   └── fanqie/                      # 番茄小说
-│       └── crawler.py               # API 爬虫
+│       └── crawler.py               # API 爬虫（继承 BaseCrawler）
 ├── analyzer/
 │   ├── structure_analyzer.py        # 基础结构分析（纯统计）
 │   ├── style_analyzer.py            # AI 写作风格分析
@@ -91,6 +107,12 @@ NovelCrawler/
 ├── tools/
 │   ├── browser.py                   # Playwright 浏览器管理
 │   └── utils.py                     # 工具函数
+├── tests/
+│   ├── conftest.py                  # 测试配置
+│   ├── test_utils.py                # 工具函数测试
+│   ├── test_models.py               # 数据模型测试
+│   ├── test_main.py                 # CLI 入口逻辑测试
+│   └── test_analyzer.py             # 结构分析器测试
 └── output/                          # 输出目录
     ├── rank/                        # 排行榜数据
     └── analysis/                    # 拆书分析报告
@@ -101,7 +123,7 @@ NovelCrawler/
 项目架构支持快速扩展新平台，只需：
 
 1. 在 `novel_platform/` 下创建新目录
-2. 实现 `crawler.py`（继承 `BaseCrawler` 或独立实现）
+2. 实现 `crawler.py`（继承 `BaseCrawler`，实现 `crawl_rank_list` / `crawl_novel_detail` / `crawl_chapter_list`）
 3. 在 `config/base_config.py` 添加平台配置
 4. 在 `main.py` 的 `PLATFORMS` 字典中注册
 

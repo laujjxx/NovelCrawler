@@ -46,58 +46,31 @@ CHARACTER_SYSTEM_PROMPT = """你是一位资深的网文分析专家和角色设
 class CharacterAnalyzer(BaseAnalyzer):
     """人物关系 AI 分析器"""
 
+    SYSTEM_PROMPT = CHARACTER_SYSTEM_PROMPT
+    ANALYSIS_TYPE = "character_analysis"
+    MAX_CHAPTERS_IN_PROMPT = 50  # 人物分析需要更多章节上下文
+
     async def analyze(self, novel_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        分析小说的人物设定和关系
-        """
+        """分析小说的人物设定和关系"""
         detail = novel_data.get("detail", {})
         chapters = novel_data.get("chapters", [])
 
-        user_prompt = self._build_prompt(detail, chapters)
-        self.logger.info(f"正在分析人物关系: {detail.get('title', '未知')}")
-
-        result = await self._call_llm_json(
-            system_prompt=CHARACTER_SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-        )
-
-        result["analysis_type"] = "character_analysis"
-        result["book_id"] = detail.get("book_id", "")
-        result["title"] = detail.get("title", "")
-        return result
-
-    def _build_prompt(
-        self, detail: Dict, chapters: List[Dict]
-    ) -> str:
-        """构建分析 prompt"""
-        parts = [
-            f"## 小说信息",
-            f"- 书名: {detail.get('title', '未知')}",
-            f"- 作者: {detail.get('author', '未知')}",
-            f"- 类型: {detail.get('category', '未知')} {detail.get('sub_category', '')}",
-            f"- 标签: {', '.join(detail.get('tags', []))}",
-            f"- 总字数: {detail.get('word_count', 0)}",
-            f"- 章节数: {len(chapters)}",
-            f"",
-            f"## 简介",
-            f"{detail.get('description', '无简介')}",
-            f"",
-            f"## 章节目录（前50章，用于推断人物关系）",
-        ]
-
-        for i, ch in enumerate(chapters[:50]):
-            vol = ch.get("volume_name", "")
-            prefix = f"[{vol}] " if vol else ""
-            parts.append(f"  {i+1}. {prefix}{ch.get('title', '无标题')}")
-
-        if len(chapters) > 50:
-            parts.append(f"  ... 共 {len(chapters)} 章")
-
-        parts.append("")
-        parts.append(
+        extra_instruction = (
             "请根据简介和章节目录推断该小说的人物设定和关系网络。"
             "注意：你可能无法获取所有角色信息，请基于已有信息做合理推断，"
             "对于不确定的信息请标注'推断'。"
         )
+        user_prompt = self._build_prompt(detail, chapters, extra_instruction)
+        self.logger.info(
+            f"正在分析 [{self.ANALYSIS_TYPE}]: {detail.get('title', '未知')}"
+        )
 
-        return "\n".join(parts)
+        result = await self._call_llm_json(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+        )
+
+        result["analysis_type"] = self.ANALYSIS_TYPE
+        result["book_id"] = detail.get("book_id", "")
+        result["title"] = detail.get("title", "")
+        return result
